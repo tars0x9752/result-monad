@@ -55,4 +55,52 @@ function isOk<T, E extends ErrStatus>(result: ResultMonad<T, E>): result is OkMo
   return result.context === 'Ok'
 }
 
+function ok<T>(val: T): OkMonad<T> {
+  function fmap<U>(func: (v: T) => U): OkMonad<U> {
+    return ok(func(val))
+  }
+
+  function liftA<U, E extends ErrStatus>(rFunc: ResultMonad<(v: T) => U, E>): ResultMonad<U, E> {
+    if (isErr(rFunc)) {
+      return rFunc
+    }
+
+    return ok(rFunc.val(val))
+  }
+
+  function liftM<U, E extends ErrStatus>(mFunc: (v: T) => ResultMonad<U, E>): ResultMonad<U, E> {
+    return mFunc(val)
+  }
+
+  function toPrimitive(_hint: 'number' | 'string' | 'default') {
+    if (typeof val === 'number') {
+      return val
+    }
+
+    if (typeof val === 'boolean') {
+      return val
+    }
+
+    return `Ok ${val}`
+}
+
+  function toString() {
+    return `Ok ${val}`
+  }
+
+  return {
+    val,
+    context: 'Ok',
+    isOk: () => true,
+    isErr: () => false,
+    fmap,
+    liftA,
+    liftM,
+    [Symbol.toPrimitive]: toPrimitive,
+    [Symbol.toStringTag]: toString,
+    $: fmap,
+    '*': liftA,
+    '>>=': liftM,
+    b: liftM,
+  }
 }
