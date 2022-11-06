@@ -46,4 +46,13 @@ type ErrMonad<E extends ErrStatus> = Readonly<{
   '>>=': ErrMonad<E>['liftM']
   b: ErrMonad<E>['liftM']
 }>
+
+function isErr<T, E extends ErrStatus>(result: ResultMonad<T, E>): result is ErrMonad<E> {
+  return result.context === 'Err'
+}
+
+function isOk<T, E extends ErrStatus>(result: ResultMonad<T, E>): result is OkMonad<T> {
+  return result.context === 'Ok'
+}
+
 }
