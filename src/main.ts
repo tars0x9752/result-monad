@@ -1,77 +1,43 @@
 /**
  * ----- ResultMonad -----
  */
+type Func<Parameter, Return> = (parameter: Parameter) => Return
 
-type ErrStatus = {
-  status: string
-  message: string
-}
+type ResultMonad<T, E> = OkMonad<T> | ErrMonad<E>
 
-type ResultMonad<T, E extends ErrStatus> = OkMonad<T> | ErrMonad<E>
-
-type ResultContext = ResultMonad<never, never>['context']
-
-type OkMonad<T> = Readonly<{
+interface OkMonad<T> {
   val: T
   context: 'Ok'
   isOk: () => true
   isErr: () => false
-  fmap: <U>(func: (v: T) => U) => OkMonad<U>
-  liftA: <U, E extends ErrStatus>(rFunc: ResultMonad<(v: T) => U, E>) => ResultMonad<U, E>
-  liftM: <U, E extends ErrStatus>(mFunc: (v: T) => ResultMonad<U, E>) => ResultMonad<U, E>
+  fmap: <U>(func: Func<T, U>) => OkMonad<U>
+  apply: <U>(func: OkMonad<Func<T, U>>) => OkMonad<U>
+  chain: <U, X>(func: Func<T, ResultMonad<U, X>>) => ResultMonad<U, X>
   [Symbol.toPrimitive]: (hint: 'number' | 'string' | 'default') => any
   [Symbol.toStringTag]: () => string
+}
 
-  // --- alias ---
-  $: OkMonad<T>['fmap']
-  '*': OkMonad<T>['liftA']
-  '>>=': OkMonad<T>['liftM']
-  b: OkMonad<T>['liftM']
-}>
-
-type ErrMonad<E extends ErrStatus> = Readonly<{
+interface ErrMonad<E> {
   val: E
   context: 'Err'
   isOk: () => false
   isErr: () => true
-  fmap: <X extends ErrStatus>(func: (e: E) => X) => ErrMonad<X>
-  liftA: <U, X extends ErrStatus>(rFunc: ResultMonad<(v: E) => U, X>) => ResultMonad<U, X>
-  liftM: <U, X extends ErrStatus>(func: (e: E) => ResultMonad<U, X>) => ResultMonad<U, X>
+  fmap: <X>(func: Func<E, X>) => ErrMonad<X>
+  apply: <X>(func: OkMonad<Func<E, X>>) => ErrMonad<X>
+  chain: <U, X>(func: Func<E, ResultMonad<U, X>>) => ResultMonad<U, X>
   [Symbol.toPrimitive]: (hint: 'number' | 'string' | 'default') => any
   [Symbol.toStringTag]: () => string
+}
 
-  // --- alias ---
-  $: ErrMonad<E>['fmap']
-  '*': ErrMonad<E>['liftA']
-  '>>=': ErrMonad<E>['liftM']
-  b: ErrMonad<E>['liftM']
-}>
-
-function isErr<T, E extends ErrStatus>(result: ResultMonad<T, E>): result is ErrMonad<E> {
+function isErr<T, E>(result: ResultMonad<T, E>): result is ErrMonad<E> {
   return result.context === 'Err'
 }
 
-function isOk<T, E extends ErrStatus>(result: ResultMonad<T, E>): result is OkMonad<T> {
+function isOk<T, E>(result: ResultMonad<T, E>): result is OkMonad<T> {
   return result.context === 'Ok'
 }
 
 function ok<T>(val: T): OkMonad<T> {
-  function fmap<U>(func: (v: T) => U): OkMonad<U> {
-    return ok(func(val))
-  }
-
-  function liftA<U, E extends ErrStatus>(rFunc: ResultMonad<(v: T) => U, E>): ResultMonad<U, E> {
-    if (isErr(rFunc)) {
-      return rFunc
-    }
-
-    return ok(rFunc.val(val))
-  }
-
-  function liftM<U, E extends ErrStatus>(mFunc: (v: T) => ResultMonad<U, E>): ResultMonad<U, E> {
-    return mFunc(val)
-  }
-
   function toPrimitive(_hint: 'number' | 'string' | 'default') {
     if (typeof val === 'number') {
       return val
@@ -93,21 +59,47 @@ function ok<T>(val: T): OkMonad<T> {
     context: 'Ok',
     isOk: () => true,
     isErr: () => false,
-    fmap,
-    liftA,
-    liftM,
+    fmap<U>(func: Func<T, U>): OkMonad<U> {
+      return ok(func(val))
+    },
+    apply<U>(func: OkMonad<Func<T, U>>): OkMonad<U> {
+      return ok(func.val(val))
+    },
+    chain<U, X>(func: Func<T, ResultMonad<U, X>>): ReturnType<typeof func> {
+      return func(val)
+    },
     [Symbol.toPrimitive]: toPrimitive,
     [Symbol.toStringTag]: toString,
-    $: fmap,
-    '*': liftA,
-    '>>=': liftM,
-    b: liftM,
   }
 }
 
-function err<E extends ErrStatus>(val: E): ErrMonad<E> {
-  function fmap<X extends ErrStatus>(func: (v: E) => X): ErrMonad<X> {
+function err<E>(val: E): ErrMonad<E> {
+  function toPrimitive(_hint: 'number' | 'string' | 'default') {
+    return `Err ${val}`
+  }
+
+  function toString() {
+    return `Err ${val}`
+  }
+
+  return {
+    val,
+    context: 'Err',
+    isOk: () => false,
+    isErr: () => true,
+    fmap<X>(func: Func<E, X>): ErrMonad<X> {
     return err(func(val))
+    },
+    apply<X>(func: OkMonad<Func<E, X>>): ErrMonad<X> {
+      return err(func.val(val))
+    },
+    chain<U, X>(func: Func<E, ResultMonad<U, X>>): ReturnType<typeof func> {
+      return func(val)
+    },
+    [Symbol.toPrimitive]: toPrimitive,
+    [Symbol.toStringTag]: toString,
+  }
+}
   }
 
   function liftA<U, X extends ErrStatus>(rFunc: ResultMonad<(v: E) => U, X>): ResultMonad<U, X> {
