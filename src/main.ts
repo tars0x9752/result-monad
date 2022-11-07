@@ -4,35 +4,35 @@
 
 type Func<Parameter, Return> = (parameter: Parameter) => Return
 
-type ResultMonad<T, E> = OkMonad<T> | ErrMonad<E>
+export type Result<T, E> = Ok<T> | Err<E>
 
-type OkMonad<T> = {
+export type Ok<T> = {
   val: T
   context: 'Ok'
   isOk: () => true
   isErr: () => false
-  fmap: <U>(func: Func<T, U>) => OkMonad<U>
-  apply: <U>(func: OkMonad<Func<T, U>>) => OkMonad<U>
-  chain: <U, X>(func: Func<T, ResultMonad<U, X>>) => ResultMonad<U, X>
+  fmap: <U>(func: Func<T, U>) => Ok<U>
+  apply: <U>(func: Ok<Func<T, U>>) => Ok<U>
+  chain: <U, X>(func: Func<T, Result<U, X>>) => Result<U, X>
   [Symbol.toPrimitive]: (hint: 'number' | 'string' | 'default') => any
   [Symbol.toStringTag]: () => string
 }
 
-type ErrMonad<E> = {
+export type Err<E> = {
   val: E
   context: 'Err'
   isOk: () => false
   isErr: () => true
-  fmap: <X>(func: Func<E, X>) => ErrMonad<X>
-  apply: <X>(func: OkMonad<Func<E, X>>) => ErrMonad<X>
-  chain: <U, X>(func: Func<E, ResultMonad<U, X>>) => ResultMonad<U, X>
+  fmap: <X>(func: Func<E, X>) => Err<X>
+  apply: <X>(func: Ok<Func<E, X>>) => Err<X>
+  chain: <U, X>(func: Func<E, Result<U, X>>) => Result<U, X>
   [Symbol.toPrimitive]: (hint: 'number' | 'string' | 'default') => any
   [Symbol.toStringTag]: () => string
 }
 
-type ResultContext = OkMonad<never>['context'] | ErrMonad<never>['context']
+export type ResultContext = Result<never, never>['context']
 
-type ResultMatch<T, E, R1, R2 = R1> = {
+export type ResultMatch<T, E, R1, R2 = R1> = {
   Ok: (p: T) => R1
   Err: (p: E) => R2
 }
@@ -41,7 +41,7 @@ type ResultMatch<T, E, R1, R2 = R1> = {
  * ----- Core -----
  */
 
-function ok<T>(val: T): OkMonad<T> {
+export function ok<T>(val: T): Ok<T> {
   function toPrimitive(hint: 'number' | 'string' | 'default') {
     if (hint === 'number') {
       // 1 for ok, 0 for err
@@ -57,7 +57,7 @@ function ok<T>(val: T): OkMonad<T> {
     }
 
     return `Ok ${val}`
-}
+  }
 
   function toString() {
     return `Ok ${val}`
@@ -68,13 +68,13 @@ function ok<T>(val: T): OkMonad<T> {
     context: 'Ok',
     isOk: () => true,
     isErr: () => false,
-    fmap<U>(func: Func<T, U>): OkMonad<U> {
+    fmap<U>(func: Func<T, U>): Ok<U> {
       return ok(func(val))
     },
-    apply<U>(func: OkMonad<Func<T, U>>): OkMonad<U> {
+    apply<U>(func: Ok<Func<T, U>>): Ok<U> {
       return ok(func.val(val))
     },
-    chain<U, X>(func: Func<T, ResultMonad<U, X>>): ReturnType<typeof func> {
+    chain<U, X>(func: Func<T, Result<U, X>>): ReturnType<typeof func> {
       return func(val)
     },
     [Symbol.toPrimitive]: toPrimitive,
@@ -82,7 +82,7 @@ function ok<T>(val: T): OkMonad<T> {
   }
 }
 
-function err<E>(val: E): ErrMonad<E> {
+export function err<E>(val: E): Err<E> {
   function toPrimitive(hint: 'number' | 'string' | 'default') {
     if (hint === 'number') {
       // 1 for ok, 0 for err
@@ -101,13 +101,13 @@ function err<E>(val: E): ErrMonad<E> {
     context: 'Err',
     isOk: () => false,
     isErr: () => true,
-    fmap<X>(func: Func<E, X>): ErrMonad<X> {
-    return err(func(val))
+    fmap<X>(func: Func<E, X>): Err<X> {
+      return err(func(val))
     },
-    apply<X>(func: OkMonad<Func<E, X>>): ErrMonad<X> {
+    apply<X>(func: Ok<Func<E, X>>): Err<X> {
       return err(func.val(val))
     },
-    chain<U, X>(func: Func<E, ResultMonad<U, X>>): ReturnType<typeof func> {
+    chain<U, X>(func: Func<E, Result<U, X>>): ReturnType<typeof func> {
       return func(val)
     },
     [Symbol.toPrimitive]: toPrimitive,
@@ -119,18 +119,18 @@ function err<E>(val: E): ErrMonad<E> {
  * ----- Functions -----
  */
 
-function isErr<T, E>(result: ResultMonad<T, E>): result is ErrMonad<E> {
+export function isErr<T, E>(result: Result<T, E>): result is Err<E> {
   return result.context === 'Err'
-  }
+}
 
-function isOk<T, E>(result: ResultMonad<T, E>): result is OkMonad<T> {
+export function isOk<T, E>(result: Result<T, E>): result is Ok<T> {
   return result.context === 'Ok'
 }
 
-function bind<T, E, U = T, X = E>(
-  result: ResultMonad<T, E>,
-  binder: Func<T, ResultMonad<U, X>>
-): ResultMonad<U, X> | ErrMonad<E> {
+export function bind<T, E, U = T, X = E>(
+  result: Result<T, E>,
+  binder: Func<T, Result<U, X>>
+): Result<U, X> | Err<E> {
   if (isErr(result)) {
     return result
   }
@@ -138,7 +138,7 @@ function bind<T, E, U = T, X = E>(
   return binder(result.val)
 }
 
-function defaultValue<T, E>(result: ResultMonad<T, E>, defVal: T): T {
+export function defaultValue<T, E>(result: Result<T, E>, defVal: T): T {
   if (isErr(result)) {
     return defVal
   }
@@ -146,7 +146,7 @@ function defaultValue<T, E>(result: ResultMonad<T, E>, defVal: T): T {
   return result.val
 }
 
-function defaultWith<T, E>(result: ResultMonad<T, E>, defThunk: Func<E, T>): T {
+export function defaultWith<T, E>(result: Result<T, E>, defThunk: Func<E, T>): T {
   if (isErr(result)) {
     return defThunk(result.val)
   }
@@ -154,16 +154,16 @@ function defaultWith<T, E>(result: ResultMonad<T, E>, defThunk: Func<E, T>): T {
   return result.val
 }
 
-function satisfy<T, E>(result: ResultMonad<T, E>, predicate: Func<T, boolean>): boolean {
+export function satisfy<T, E>(result: Result<T, E>, predicate: Func<T, boolean>): boolean {
   if (isErr(result)) {
     return false
-    }
-
-  return predicate(result.val)
   }
 
-function match<T, E, U = T, X = E>(
-  result: ResultMonad<T, E>,
+  return predicate(result.val)
+}
+
+export function match<T, E, U = T, X = E>(
+  result: Result<T, E>,
   matcher: ResultMatch<T, E, U, X>
 ): U | X {
   if (isErr(result)) {
@@ -171,25 +171,4 @@ function match<T, E, U = T, X = E>(
   }
 
   return matcher.Ok(result.val)
-  }
-
-  function toString() {
-    return `Err ${val.status}: ${val.message}`
-  }
-
-  return {
-    val,
-    context: 'Err',
-    isOk: () => false,
-    isErr: () => true,
-    fmap,
-    liftA,
-    liftM,
-    [Symbol.toPrimitive]: toPrimitive,
-    [Symbol.toStringTag]: toString,
-    $: fmap,
-    '*': liftA,
-    '>>=': liftM,
-    b: liftM,
-  }
 }
