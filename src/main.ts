@@ -4,13 +4,13 @@
 
 type Func<Parameter, Return> = (parameter: Parameter) => Return
 
-export type Result<T, E> = Ok<T> | Err<E>
+export type Result<OkValue, ErrValue> = Ok<OkValue> | Err<ErrValue>
 
 export type Ok<T> = {
   val: T
   context: 'Ok'
-  isOk: () => true
-  isErr: () => false
+  is_Ok: true
+  is_Err: false
   fmap: <U>(func: Func<T, U>) => Ok<U>
   apply: <U>(func: Ok<Func<T, U>>) => Ok<U>
   chain: <U, X>(func: Func<T, Result<U, X>>) => Result<U, X>
@@ -21,8 +21,8 @@ export type Ok<T> = {
 export type Err<E> = {
   val: E
   context: 'Err'
-  isOk: () => false
-  isErr: () => true
+  is_Ok: false
+  is_Err: true
   fmap: <X>(func: Func<E, X>) => Err<X>
   apply: <X>(func: Ok<Func<E, X>>) => Err<X>
   chain: <U, X>(func: Func<E, Result<U, X>>) => Result<U, X>
@@ -32,9 +32,9 @@ export type Err<E> = {
 
 export type ResultContext = Result<never, never>['context']
 
-export type ResultMatch<T, E, R1, R2 = R1> = {
-  Ok: (p: T) => R1
-  Err: (p: E) => R2
+export type ResultMatch<OkValue, ErrValue, OkReturn, ErrReturn = OkReturn> = {
+  Ok: Func<OkValue, OkReturn>
+  Err: Func<ErrValue, ErrReturn>
 }
 
 /**
@@ -42,32 +42,11 @@ export type ResultMatch<T, E, R1, R2 = R1> = {
  */
 
 export function ok<T>(val: T): Ok<T> {
-  function toPrimitive(hint: 'number' | 'string' | 'default') {
-    if (hint === 'number') {
-      // 1 for ok, 0 for err
-      return 1
-    }
-
-    if (typeof val === 'number') {
-      return val
-    }
-
-    if (typeof val === 'boolean') {
-      return val
-    }
-
-    return `Ok ${val}`
-  }
-
-  function toString() {
-    return `Ok ${val}`
-  }
-
   return {
     val,
     context: 'Ok',
-    isOk: () => true,
-    isErr: () => false,
+    is_Ok: true,
+    is_Err: false,
     fmap<U>(func: Func<T, U>): Ok<U> {
       return ok(func(val))
     },
@@ -77,30 +56,34 @@ export function ok<T>(val: T): Ok<T> {
     chain<U, X>(func: Func<T, Result<U, X>>): ReturnType<typeof func> {
       return func(val)
     },
-    [Symbol.toPrimitive]: toPrimitive,
-    [Symbol.toStringTag]: toString,
+    [Symbol.toPrimitive](hint: 'number' | 'string' | 'default') {
+      if (hint === 'number') {
+        // 1 for ok, 0 for err
+        return 1
+      }
+
+      if (typeof val === 'number') {
+        return val
+      }
+
+      if (typeof val === 'boolean') {
+        return val
+      }
+
+      return `Ok ${val}`
+    },
+    [Symbol.toStringTag]() {
+      return `Ok ${val}`
+    },
   }
 }
 
 export function err<E>(val: E): Err<E> {
-  function toPrimitive(hint: 'number' | 'string' | 'default') {
-    if (hint === 'number') {
-      // 1 for ok, 0 for err
-      return 0
-    }
-
-    return `Err ${val}`
-  }
-
-  function toString() {
-    return `Err ${val}`
-  }
-
   return {
     val,
     context: 'Err',
-    isOk: () => false,
-    isErr: () => true,
+    is_Ok: false,
+    is_Err: true,
     fmap<X>(func: Func<E, X>): Err<X> {
       return err(func(val))
     },
@@ -110,8 +93,17 @@ export function err<E>(val: E): Err<E> {
     chain<U, X>(func: Func<E, Result<U, X>>): ReturnType<typeof func> {
       return func(val)
     },
-    [Symbol.toPrimitive]: toPrimitive,
-    [Symbol.toStringTag]: toString,
+    [Symbol.toPrimitive](hint: 'number' | 'string' | 'default') {
+      if (hint === 'number') {
+        // 1 for ok, 0 for err
+        return 0
+      }
+
+      return `Err ${val}`
+    },
+    [Symbol.toStringTag]() {
+      return `Err ${val}`
+    },
   }
 }
 
@@ -120,18 +112,18 @@ export function err<E>(val: E): Err<E> {
  */
 
 export function isErr<T, E>(result: Result<T, E>): result is Err<E> {
-  return result.context === 'Err'
+  return result.is_Err
 }
 
 export function isOk<T, E>(result: Result<T, E>): result is Ok<T> {
-  return result.context === 'Ok'
+  return result.is_Ok
 }
 
 export function bind<T, E, U = T, X = E>(
   result: Result<T, E>,
   binder: Func<T, Result<U, X>>
 ): Result<U, X> | Err<E> {
-  if (isErr(result)) {
+  if (result.is_Err) {
     return result
   }
 
