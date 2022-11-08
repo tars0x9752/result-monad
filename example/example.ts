@@ -1,34 +1,45 @@
-import * as ResultMonad from '../src/main'
+import { err, ok, bind, match, defaultValue, defaultWith, isErr, isOk, satisfy } from '../src/main'
+import type { Result } from '../src/main'
 
-const { err, ok, bind, match } = ResultMonad
+type CustomError = {
+  code: string
+  message: string
+}
+
+const head = <T>(arr: T[]): Result<T, CustomError> => {
+  if (arr.length <= 0) {
+    return err({
+      code: 'EMPTY_LIST',
+      message: 'empty list error',
+    })
+  }
+
+  return ok(arr[0])
+}
 
 const double = (x: number) => x * 2
 
-const half = (x: number) => {
-  return x / 2
+const showError = (e: CustomError) => `${e.code}: ${e.message}`
+
+function main() {
+  /**
+   * --- example 1 ---
+   */
+
+  const res = head([21, 123, 321])
+
+  if (res.is_Err) {
+    // res is inferred as Err<CustomError> here!
+    res.fmap(showError).fmap(console.log)
+    return
+  }
+
+  // res is inferred as Ok<number>
+  res.fmap(double).fmap(console.log) // 42
+
+  const isResEven = satisfy(res, num => num % 2 === 0) // false
+
+  const val = res.val // 21
 }
 
-const formatError = (x: string) => {
-  return `code: ${x}`
-}
-
-const hogeErr = (_x: number) => {
-  return err('HOGE')
-}
-
-const res = ok(42).fmap(double).fmap(console.log)
-
-const res2 = ok(42).apply(ok(double)).fmap(double).fmap(half).chain(hogeErr).fmap(formatError)
-
-console.log(`${res2}`)
-
-const res3 = bind<number, string>(ok(42), x => (x % 2 === 0 ? ok(x) : err('ODD')))
-
-console.log(`${res3}`)
-
-const res4 = match(res3, {
-  Err: formatError,
-  Ok: ok,
-})
-
-console.log(`${res4}`)
+main()
